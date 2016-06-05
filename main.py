@@ -143,7 +143,12 @@ class KeyMapper(object):
         direction = ["NORTH", "EAST", "SOUTH", "WEST"][direction]
         fingers = str(fingers) + "_FINGERS"
 
-        combinations, text = self.map["%s_%s_%s"%(style, direction, fingers)]
+        map_key = "%s_%s_%s"%(style, direction, fingers)
+
+        if map_key not in self.map:
+            return
+
+        combinations, text = self.map[map_key]
 
         print "Sending:", text
 
