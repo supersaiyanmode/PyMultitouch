@@ -112,7 +112,9 @@ class KeyMapper(object):
     KEY_MAP = {
         "LEFT_CONTROL": 'control_l_key', "RIGHT_CONTROL": 'control_r_key',
         "LEFT_ALT": 'alt_l_key', "RIGHT_ALT": 'alt_r_key',
+        "LEFT_SHIFT": 'shift_l_key', "RIGHT_SHIFT": 'shift_r_key',
         "RIGHT": 'right_key', "LEFT": 'left_key', "UP": 'up_key', "DOWN": 'down_key',
+        "SUPER": 'super_l_key', "TAB": 'tab_key',
     }
 
     def __init__(self):
