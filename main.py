@@ -232,6 +232,11 @@ def exit():
     poller.stop()
     touchpad.stop()
 
+def restart():
+    exit()
+    logger.info("Restarting ..")
+    os.execl(sys.executable, *([sys.executable]+sys.argv))
+
 def main():
     for sig in (signal.SIGTERM, signal.SIGINT):
         prev_handler = signal.getsignal(sig)
@@ -241,7 +246,7 @@ def main():
             if prevFn:
                 prevFn(x, y)
         signal.signal(sig, lambda x, y: sig_handler(x, y, prev_handler))
-    
+    signal.signal(signal.SIGHUP, lambda x, y: restart())
 
     poller.register(touchpad)
     touchpad.register(keymapper)
