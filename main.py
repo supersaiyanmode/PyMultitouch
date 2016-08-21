@@ -1,12 +1,28 @@
 import os.path
+import os
+import sys
 import threading
 from subprocess import Popen, STDOUT, PIPE
 from Queue import Queue, Empty
 import signal
 from collections import Counter
 import re
+import logging
+import logging.handlers
+
 
 from pykeyboard import PyKeyboard
+
+formatter = logging.Formatter('[%(module)s]: %(message)s')
+logger = logging.getLogger('PyMultiTouchLogger')
+logger.setLevel(logging.DEBUG if "debug" in sys.argv else logging.INFO)
+sh = logging.StreamHandler(sys.stdout)
+sh.setFormatter(formatter)
+#fh = logging.handlers.RotatingFileHandler("/var/log/PyMultiTouch.log", maxBytes=10*1000*1000, backupCount=3)
+#fh.setFormatter(formatter)
+#logger.addHandler(fh)
+logger.addHandler(sh)
+
 
 NORTH, EAST, SOUTH, WEST = range(4)
 TIME, COORD, PRESSURE, FINGER, LEFT, RIGHT = range(6)
@@ -42,12 +58,14 @@ class SynClientPoller(object):
             if not self.listener:
                 continue
             data = self.parseData(str(line).strip())
+            if self.debug:
+                logger.debug("Data: " + str(data))
             if data:
                 self.listener.event(data)
         p.stdout.close()
-        print "Closing client process."
+        logger.debug("Closing client process.")
         p.wait()
-        print "Closed client process."
+        logger.debug("Closed client process.")
 
     def stop(self):
         self.stop_requested = True
@@ -66,7 +84,7 @@ class SynClientPoller(object):
             right = bool(int(parts[7]))
             return (time, coords, pressure, fingers, left, right)
         except Exception, e:
-            print e
+            logger.exception("Unable to parse data.")
             return None
 
 class TouchpadEventProcessor(object):
@@ -91,7 +109,7 @@ class TouchpadEventProcessor(object):
         self.queue.put(obj)
 
     def process(self):
-        print "Start processing events.."
+        logger.info("Start processing events..")
         history = []
         prevTime = -Config.TIME_THRESHOLD
         clicked = False
@@ -102,9 +120,9 @@ class TouchpadEventProcessor(object):
             self.queue.task_done()
 
             if item[FINGER] == 0:
-                print "All fingers lifted."
+                logger.info("All fingers lifted.")
                 if gesture:
-                    self.evaluate(history)
+                    self.evaluate_gesture(history)
                 history = []
                 clicked = False
                 gesture = True
@@ -112,15 +130,18 @@ class TouchpadEventProcessor(object):
             elif not clicked and (item[LEFT] or item[RIGHT]):
                 clicked = True
                 gesture = False
-                if self.listener:
-                    self.listener.click(LEFT if item[LEFT] else RIGHT, item[FINGER])
+                self.evaluate_click(LEFT, item[FINGER])
             elif clicked and not (item[LEFT] or item[RIGHT]):
                 clicked = False
             elif gesture:
                 history.append(item)
-        print "Done processing events."
+        logger.info("Done processing events.")
+
+    def evaluate_click(self, item, finger):
+        if self.listener:
+            self.listener.click(item, finger)
     
-    def evaluate(self, history):
+    def evaluate_gesture(self, history):
         if len(history) < 2:
             return
 
@@ -131,8 +152,8 @@ class TouchpadEventProcessor(object):
         if direction is None:
             return
 
-        print "Direction:", ["NORTH", "EAST", "SOUTH", "WEST"][direction],
-        print "Fingers:", finger
+        dirStr = ["NORTH", "EAST", "SOUTH", "WEST"][direction]
+        logger.info("Direction:" + dirStr + ", fingers: " + str(finger))
 
         if self.listener:
             self.listener.swipe(direction, finger)
@@ -140,9 +161,9 @@ class TouchpadEventProcessor(object):
 
     def get_direction(self, arr):
         arr = list(reversed(arr))
-        print "Arr:", arr
+        logger.info("Array:" + str(arr))
         delta = map(sum, zip(*[(x[0] - y[0], x[1] - y[1]) for x, y in zip(arr, arr[1:])]))
-        print "Delta:", delta
+        logger.info("Delta:" + str(delta))
         if len(delta) != 2:
             return None
         if abs(delta[0]) < abs(delta[1]): #More difference in Y direction
@@ -181,7 +202,7 @@ class KeyMapper(object):
                     self.map[key] = (key_combos, value)
                 else:
                     self.map[key] = []
-                print "Loaded:", line
+                logger.info("Loaded:" + line)
     
     def parse_key(self, key):
         if key in self.KEY_MAP:
@@ -202,7 +223,7 @@ class KeyMapper(object):
         self.process_event(map_key)
 
     def click(self, typ, fingers):
-        typ = "LEFT" if typ == LEFT else RIGHT
+        typ = "LEFT" if typ == LEFT else "RIGHT"
         map_key = "%s_CLICK_%d_FINGERS"%(typ, fingers)
         self.process_event(map_key)
     
@@ -212,7 +233,7 @@ class KeyMapper(object):
 
         combinations, text = self.map[map_key]
 
-        print "Sending:", text
+        logger.info("Sending: " + str(text))
         if len(combinations) > 1:
             for press_key in combinations[:-1]:
                 self.keyboard.press_key(press_key)
@@ -235,7 +256,7 @@ touchpad = TouchpadEventProcessor()
 keymapper = DebugKeyMapper() if "debug" in sys.argv else KeyMapper()
 
 def exit():
-    print "Stopping .."
+    logger.info("Stopping ..")
     poller.stop()
     touchpad.stop()
 
