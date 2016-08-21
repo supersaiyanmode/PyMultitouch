@@ -21,10 +21,11 @@ class Config(object):
 class SynClientPoller(object):
     POLL_COMMAND = ["stdbuf", "-oL", "synclient", "-m"]
 
-    def __init__(self, pollFreq=50):
+    def __init__(self, pollFreq=50, debug=False):
         self.command = self.POLL_COMMAND + [str(pollFreq)]
         self.listener = None
         self.stop_requested = False
+        self.debug = debug
 
     def register(self, obj):
         """Overwrites the previous listener."""
@@ -40,7 +41,6 @@ class SynClientPoller(object):
                 continue
             if not self.listener:
                 continue
-            print line.strip()
             data = self.parseData(str(line).strip())
             if data:
                 self.listener.event(data)
@@ -223,9 +223,16 @@ class KeyMapper(object):
         else:
             self.keyboard.tap_key(combinations[0])
 
-poller = SynClientPoller()
+class DebugKeyMapper(object):
+    def swipe(self, direction, fingers):
+        logger.info("Swipe:"  + ["NORTH", "EAST", "SOUTH", "WEST"][direction] + str(fingers) + " fingers")
+
+    def click(self, typ, fingers):
+        logger.info("Click:" + ("LEFT" if typ == LEFT else "RIGHT") + " with " + str(fingers) + " fingers")
+
+poller = SynClientPoller(debug="debug" in sys.argv)
 touchpad = TouchpadEventProcessor()
-keymapper = KeyMapper()
+keymapper = DebugKeyMapper() if "debug" in sys.argv else KeyMapper()
 
 def exit():
     print "Stopping .."
